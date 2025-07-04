@@ -30,7 +30,7 @@
    ```
 4. 运行游戏：
    ```
-   cd emperor-simulator
+   cd huangshang_simulator
    python main.py
    ```
 
@@ -80,7 +80,7 @@
    ```
 4. Run the game:
    ```
-   cd emperor-simulator
+   cd huangshang_simulator
    python main.py
    ```
 
@@ -130,7 +130,7 @@ For any questions or suggestions: nb666mc26@outlook.com
    ```
 4. ゲームを実行:
    ```
-   cd emperor-simulator
+   cd huangshang_simulator
    python main.py
    ```
 
