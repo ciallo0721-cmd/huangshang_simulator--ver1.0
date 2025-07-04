@@ -53,7 +53,7 @@
 ## English
 
 ### Game Introduction
-"Emperor Simulator" is a simulation game that allows you to experience the life of an ancient Chinese emperor. Players will role-play as Emperor Yongzheng of the Qing Dynasty, handling state affairs, reviewing memorials, interacting with concubines, and making critical decisions for the nation. The game features rich random events and a decision-making system where every choice impacts the country's development and your own destiny.
+"huangshang_simulator" is a simulation game that allows you to experience the life of an ancient Chinese emperor. Players will role-play as Emperor Yongzheng of the Qing Dynasty, handling state affairs, reviewing memorials, interacting with concubines, and making critical decisions for the nation. The game features rich random events and a decision-making system where every choice impacts the country's development and your own destiny.
 
 ### Key Features
 - 🏯 Immersive imperial life experience
