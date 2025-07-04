@@ -1,4 +1,4 @@
-# 皇上模拟器 - Emperor Simulator
+# 皇上模拟器 - huangshang_simulator
 
 ## 中文 (Chinese)
 
