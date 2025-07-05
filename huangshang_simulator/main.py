@@ -701,15 +701,6 @@ def create_save_load_buttons():
     
     return buttons
 
-# 初始化按钮变量
-start_menu_buttons = create_start_menu_buttons()
-main_buttons = create_main_buttons()
-settings_button = create_settings_button()
-back_button = Button(SCREEN_WIDTH - 120, 20, 100, 60, "返回")
-interact_button = Button(SCREEN_WIDTH - 220, SCREEN_HEIGHT - 100, 200, 70, "宠幸", RED, (220, 100, 100), WHITE)
-settings_menu_buttons = create_settings_menu()
-save_load_buttons = create_save_load_buttons()
-
 # 绘制状态条
 def draw_stat_bar(surface, x, y, width, height, value, max_value, color, bg_color=GRAY, text=""):
     """绘制带有文本的状态条"""
@@ -741,7 +732,7 @@ def show_warning(surface, message):
 # 主游戏循环
 def main_game_loop():
     # 声明全局变量
-    global SCREEN_WIDTH, SCREEN_HEIGHT, screen, start_menu_buttons, main_buttons, settings_button, back_button, interact_button, settings_menu_buttons, save_load_buttons
+    global SCREEN_WIDTH, SCREEN_HEIGHT, screen, start_menu_buttons, main_buttons, settings_button, back_button, interact_button, settings_menu_buttons
     
     clock = pygame.time.Clock()
     running = True
@@ -943,7 +934,6 @@ def main_game_loop():
                             back_button = Button(SCREEN_WIDTH - 120, 20, 100, 60, "返回")
                             interact_button = Button(SCREEN_WIDTH - 220, SCREEN_HEIGHT - 100, 200, 70, "宠幸", RED, (220, 100, 100), WHITE)
                             settings_menu_buttons = create_settings_menu()
-                            save_load_buttons = create_save_load_buttons()
                             
                             # 更新按钮文本
                             settings_menu_buttons[3].text = f"分辨率: {new_width}x{new_height}"
@@ -1445,6 +1435,10 @@ def run_app():
     
     # 启动主游戏循环
     try:
+        # 初始化存档/读档界面按钮
+        global save_load_buttons
+        save_load_buttons = create_save_load_buttons()
+        
         main_game_loop()
     except Exception as e:
         print(f"游戏运行出错: {e}")
