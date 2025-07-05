@@ -5,6 +5,7 @@ import random
 from datetime import datetime, timedelta
 import os
 import time
+import json
 
 # 初始化pygame
 pygame.init()
@@ -57,6 +58,11 @@ RESOLUTIONS = [
     (3840, 2160)    # 4K
 ]
 
+# 存档目录
+SAVE_DIR = "huangshang_simulator/dangan"
+if not os.path.exists(SAVE_DIR):
+    os.makedirs(SAVE_DIR)
+
 # 字体处理 - 适配Android
 def load_font(size):
     try:
@@ -93,10 +99,137 @@ header_font = load_font(36)
 main_font = load_font(28)
 small_font = load_font(24)
 
+# 反外挂系统
+class AntiCheatSystem:
+    def __init__(self):
+        self.cheat_detected = False
+        self.last_check_time = time.time()
+        self.speed_checks = []
+        self.max_allowed_speed = 0.01  # 允许的最小帧间隔（100FPS）
+        self.max_allowed_checks = 10  # 连续检测次数
+        
+    def check_speed(self):
+        """检测游戏速度是否异常"""
+        current_time = time.time()
+        delta = current_time - self.last_check_time
+        self.last_check_time = current_time
+        
+        # 如果游戏速度异常快（小于0.01秒一帧）
+        if delta < self.max_allowed_speed:
+            self.speed_checks.append(True)
+            if len(self.speed_checks) > self.max_allowed_checks:
+                self.speed_checks.pop(0)
+            
+            # 如果连续多次检测到高速
+            if len(self.speed_checks) == self.max_allowed_checks and all(self.speed_checks):
+                self.trigger_anti_cheat("游戏速度异常")
+        else:
+            self.speed_checks = []
+    
+    def trigger_anti_cheat(self, reason):
+        """触发反外挂措施"""
+        self.cheat_detected = True
+        print(f"反外挂系统已触发: {reason}")
+        
+        # 显示警告
+        cheat_popup = {
+            "title": "反外挂警告",
+            "message": f"检测到异常行为: {reason}\n请停止使用任何外挂程序！",
+            "duration": 5  # 显示5秒
+        }
+        return cheat_popup
+
+# 存档管理器
+class SaveManager:
+    def __init__(self):
+        self.save_slots = 5
+        self.save_dir = SAVE_DIR
+        self.current_save = None
+        
+        # 创建存档目录
+        if not os.path.exists(self.save_dir):
+            os.makedirs(self.save_dir)
+    
+    def get_save_path(self, slot):
+        """获取存档路径"""
+        return os.path.join(self.save_dir, f"save_{slot}.json")
+    
+    def save_game(self, slot, game_state):
+        """保存游戏"""
+        try:
+            save_path = self.get_save_path(slot)
+            
+            # 准备存档数据
+            save_data = {
+                "day": game_state.day,
+                "year": game_state.year,
+                "date": game_state.date.strftime("%Y-%m-%d"),
+                "health": game_state.health,
+                "mood": game_state.mood,
+                "authority": game_state.authority,
+                "treasury": game_state.treasury,
+                "concubines": game_state.concubines,
+                "events": game_state.events,
+                "reports": game_state.reports,
+                "audience_requests": game_state.audience_requests,
+                "difficulty": game_state.difficulty,
+                "save_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            }
+            
+            with open(save_path, 'w') as f:
+                json.dump(save_data, f, indent=2)
+            self.current_save = slot
+            return True
+        except Exception as e:
+            print(f"存档失败: {e}")
+            return False
+    
+    def load_game(self, slot, game_state):
+        """加载游戏"""
+        try:
+            save_path = self.get_save_path(slot)
+            if os.path.exists(save_path):
+                with open(save_path, 'r') as f:
+                    save_data = json.load(f)
+                
+                # 恢复游戏状态
+                game_state.day = save_data["day"]
+                game_state.year = save_data["year"]
+                game_state.date = datetime.strptime(save_data["date"], "%Y-%m-%d")
+                game_state.health = save_data["health"]
+                game_state.mood = save_data["mood"]
+                game_state.authority = save_data["authority"]
+                game_state.treasury = save_data["treasury"]
+                game_state.concubines = save_data["concubines"]
+                game_state.events = save_data["events"]
+                game_state.reports = save_data["reports"]
+                game_state.audience_requests = save_data["audience_requests"]
+                game_state.difficulty = save_data["difficulty"]
+                
+                return True
+            return False
+        except Exception as e:
+            print(f"读档失败: {e}")
+            return False
+    
+    def get_save_info(self, slot):
+        """获取存档信息"""
+        save_path = self.get_save_path(slot)
+        if os.path.exists(save_path):
+            try:
+                with open(save_path, 'r') as f:
+                    save_data = json.load(f)
+                save_time = save_data.get("save_time", "未知时间")
+                day = save_data.get("day", 1)
+                return f"第{day}天 {save_time}"
+            except:
+                return "存档损坏"
+        return "空存档"
+
 # 游戏状态
 class GameState:
     def __init__(self):
-        self.current_view = "start_menu"  # start_menu, main, concubines, reports, audience, settings
+        self.current_view = "start_menu"  # start_menu, main, concubines, reports, audience, settings, save_load
         self.day = 1
         self.year = 1722  # 雍正元年
         self.date = datetime(self.year, 1, 1)
@@ -129,6 +262,23 @@ class GameState:
         # 音乐状态
         self.current_music = None
         self.music_playing = False
+        
+        # 关于按钮点击计数器
+        self.about_click_count = 0
+        self.last_about_click_time = 0
+        
+        # 开发者模式
+        self.developer_mode = False
+        
+        # 存档管理器
+        self.save_manager = SaveManager()
+        
+        # 反外挂系统
+        self.anti_cheat = AntiCheatSystem()
+        
+        # 警告消息
+        self.warning_message = None
+        self.warning_display_time = 0
         
         self.generate_initial_requests()
         
@@ -330,6 +480,27 @@ class GameState:
         pygame.mixer.music.stop()
         self.music_playing = False
         self.current_music = None
+    
+    def show_about(self, current_time):
+        """显示关于信息（带彩蛋）"""
+        # 如果是连续点击（1秒内）
+        if current_time - self.last_about_click_time < 1:
+            self.about_click_count += 1
+        else:
+            self.about_click_count = 1
+        
+        self.last_about_click_time = current_time
+        
+        # 显示普通关于信息
+        about_text = "皇帝模拟器 v1.0\n\n由quan于2025/6/26创建"
+        
+        # 如果连续点击10次，进入开发者模式
+        if self.about_click_count >= 10:
+            self.developer_mode = True
+            self.about_click_count = 0
+            return "开发者模式已激活！\n创作时间: 2025/6/26\n创始人: quan"
+        
+        return about_text
 
 # 创建游戏状态
 game_state = GameState()
@@ -449,6 +620,9 @@ def create_main_buttons():
     buttons.append(Button(50, y_pos, button_width, button_height, "大臣觐见", (200, 230, 180), (220, 255, 200)))
     
     y_pos += button_height + spacing
+    buttons.append(Button(50, y_pos, button_width, button_height, "存档/读档", (180, 200, 240), (200, 220, 255)))
+    
+    y_pos += button_height + spacing
     buttons.append(Button(50, y_pos, button_width, button_height, "就寝（进入下一天）", RED, (220, 100, 100), WHITE))
     
     # 退出到菜单按钮
@@ -494,6 +668,10 @@ def create_settings_menu():
     buttons.append(Button(x_pos, y_pos, button_width, button_height, mode_text, (180, 240, 200), (200, 255, 220)))
     y_pos += button_height + spacing
     
+    # 关于按钮
+    buttons.append(Button(x_pos, y_pos, button_width, button_height, "关于", (200, 180, 240), (220, 200, 255)))
+    y_pos += button_height + spacing
+    
     # 退出游戏按钮
     buttons.append(Button(x_pos, y_pos, button_width, button_height, "退出游戏", RED, (220, 100, 100), WHITE))
     y_pos += button_height + spacing
@@ -503,13 +681,34 @@ def create_settings_menu():
     
     return buttons
 
-# 全局按钮实例
+# 创建存档/读档界面按钮
+def create_save_load_buttons():
+    buttons = []
+    button_width = SCREEN_WIDTH - 100
+    button_height = 80
+    spacing = 20
+    
+    y_pos = 300
+    
+    # 创建存档槽按钮
+    for i in range(1, game_state.save_manager.save_slots + 1):
+        save_info = game_state.save_manager.get_save_info(i)
+        buttons.append(Button(50, y_pos, button_width, button_height, f"存档槽 {i}: {save_info}", (180, 200, 240), (200, 220, 255)))
+        y_pos += button_height + spacing
+    
+    # 返回按钮
+    buttons.append(Button(50, y_pos, button_width, button_height, "返回主界面", (150, 150, 180), (180, 180, 220)))
+    
+    return buttons
+
+# 初始化按钮变量
 start_menu_buttons = create_start_menu_buttons()
 main_buttons = create_main_buttons()
 settings_button = create_settings_button()
 back_button = Button(SCREEN_WIDTH - 120, 20, 100, 60, "返回")
 interact_button = Button(SCREEN_WIDTH - 220, SCREEN_HEIGHT - 100, 200, 70, "宠幸", RED, (220, 100, 100), WHITE)
 settings_menu_buttons = create_settings_menu()
+save_load_buttons = create_save_load_buttons()
 
 # 绘制状态条
 def draw_stat_bar(surface, x, y, width, height, value, max_value, color, bg_color=GRAY, text=""):
@@ -524,14 +723,30 @@ def draw_stat_bar(surface, x, y, width, height, value, max_value, color, bg_colo
     text_rect = text_surf.get_rect(midleft=(x + 10, y + height // 2))
     surface.blit(text_surf, text_rect)
 
+# 显示警告消息
+def show_warning(surface, message):
+    """在屏幕顶部显示警告消息"""
+    if not message:
+        return
+        
+    # 创建半透明背景
+    warning_bg = pygame.Surface((SCREEN_WIDTH, 60), pygame.SRCALPHA)
+    warning_bg.fill((200, 50, 50, 200))
+    surface.blit(warning_bg, (0, 0))
+    
+    # 绘制警告文本
+    warning_text = header_font.render(message, True, WHITE)
+    surface.blit(warning_text, (SCREEN_WIDTH // 2 - warning_text.get_width() // 2, 15))
+
 # 主游戏循环
 def main_game_loop():
     # 声明全局变量
-    global SCREEN_WIDTH, SCREEN_HEIGHT, screen, start_menu_buttons, main_buttons, settings_button, back_button, interact_button, settings_menu_buttons
+    global SCREEN_WIDTH, SCREEN_HEIGHT, screen, start_menu_buttons, main_buttons, settings_button, back_button, interact_button, settings_menu_buttons, save_load_buttons
     
     clock = pygame.time.Clock()
     running = True
     current_time = time.time()
+    last_time = time.time()
     
     # 用于调试的鼠标位置显示
     debug_mouse_pos = (0, 0)
@@ -541,6 +756,16 @@ def main_game_loop():
     
     while running:
         current_time = time.time()
+        dt = current_time - last_time
+        last_time = current_time
+        
+        # 反外挂检测
+        game_state.anti_cheat.check_speed()
+        
+        # 检查警告消息是否过期
+        if game_state.warning_message and current_time - game_state.warning_display_time > 5:
+            game_state.warning_message = None
+        
         mouse_pos = pygame.mouse.get_pos()
         debug_mouse_pos = mouse_pos
         
@@ -556,6 +781,9 @@ def main_game_loop():
                 button.check_hover(mouse_pos)
         elif game_state.current_view == "main":
             for button in main_buttons:
+                button.check_hover(mouse_pos)
+        elif game_state.current_view == "save_load":
+            for button in save_load_buttons:
                 button.check_hover(mouse_pos)
         
         # 设置按钮总是显示在游戏界面
@@ -616,10 +844,31 @@ def main_game_loop():
                             game_state.current_view = "reports"
                         elif button.text == "大臣觐见":
                             game_state.current_view = "audience"
+                        elif button.text == "存档/读档":
+                            game_state.current_view = "save_load"
+                            # 更新存档按钮信息
+                            save_load_buttons = create_save_load_buttons()
                         elif button.text == "就寝（进入下一天）":
                             game_state.next_day()
                         elif button.text == "退出到菜单":
                             game_state.current_view = "start_menu"
+            
+            # 处理存档/读档界面按钮
+            if game_state.current_view == "save_load":
+                for i, button in enumerate(save_load_buttons):
+                    if button.handle_event(event, current_time):
+                        if i < game_state.save_manager.save_slots:  # 存档槽按钮
+                            slot = i + 1
+                            # 保存游戏
+                            if game_state.save_manager.save_game(slot, game_state):
+                                game_state.events.append(f"游戏已保存到存档槽 {slot}")
+                            else:
+                                game_state.events.append("存档失败")
+                            
+                            # 更新存档按钮信息
+                            save_load_buttons = create_save_load_buttons()
+                        elif button.text == "返回主界面":  # 返回按钮
+                            game_state.current_view = "main"
             
             # 处理设置按钮
             if settings_button.handle_event(event, current_time) and game_state.current_view != "start_menu":
@@ -694,6 +943,7 @@ def main_game_loop():
                             back_button = Button(SCREEN_WIDTH - 120, 20, 100, 60, "返回")
                             interact_button = Button(SCREEN_WIDTH - 220, SCREEN_HEIGHT - 100, 200, 70, "宠幸", RED, (220, 100, 100), WHITE)
                             settings_menu_buttons = create_settings_menu()
+                            save_load_buttons = create_save_load_buttons()
                             
                             # 更新按钮文本
                             settings_menu_buttons[3].text = f"分辨率: {new_width}x{new_height}"
@@ -707,9 +957,14 @@ def main_game_loop():
                             else:
                                 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
                                 button.text = "窗口模式"
-                        elif i == 5:  # 退出游戏
+                        elif i == 5:  # 关于按钮
+                            # 显示关于信息
+                            about_text = game_state.show_about(current_time)
+                            game_state.warning_message = about_text
+                            game_state.warning_display_time = current_time
+                        elif i == 6:  # 退出游戏
                             running = False
-                        elif i == 6:  # 关闭设置
+                        elif i == 7:  # 关闭设置
                             game_state.settings_open = False
             
             # 处理嫔妃选择
@@ -1084,6 +1339,19 @@ def main_game_loop():
                         accept_btn.draw(screen)
                         postpone_btn.draw(screen)
             
+            elif game_state.current_view == "save_load":
+                # 绘制存档/读档界面
+                title_text = header_font.render("存档/读档", True, BLACK)
+                screen.blit(title_text, (SCREEN_WIDTH // 2 - title_text.get_width() // 2, 380))
+                
+                # 绘制提示
+                tip_text = main_font.render("点击存档槽保存当前游戏进度", True, BLACK)
+                screen.blit(tip_text, (SCREEN_WIDTH // 2 - tip_text.get_width() // 2, 250))
+                
+                # 绘制按钮
+                for button in save_load_buttons:
+                    button.draw(screen)
+            
             # 绘制底部装饰
             pygame.draw.rect(screen, DARK_RED, (0, SCREEN_HEIGHT - 40, SCREEN_WIDTH, 40))
             footer_text = small_font.render("大清雍正皇帝御览", True, LIGHT_GOLD)
@@ -1118,9 +1386,39 @@ def main_game_loop():
                 for button in settings_menu_buttons:
                     button.draw(screen)
         
-        # 调试信息 - 显示鼠标位置
-        # debug_text = small_font.render(f"Mouse: {debug_mouse_pos}", True, RED)
-        # screen.blit(debug_text, (10, SCREEN_HEIGHT - 60))
+        # 显示警告消息
+        if game_state.warning_message:
+            show_warning(screen, game_state.warning_message)
+        
+        # 显示开发者模式
+        if game_state.developer_mode:
+            dev_bg = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+            dev_bg.fill((0, 0, 0, 150))
+            screen.blit(dev_bg, (0, 0))
+            
+            dev_rect = pygame.Rect(100, 300, SCREEN_WIDTH - 200, 300)
+            pygame.draw.rect(screen, (50, 50, 100), dev_rect, border_radius=20)
+            pygame.draw.rect(screen, (100, 100, 200), dev_rect, 3, border_radius=20)
+            
+            title_text = title_font.render("开发者模式", True, LIGHT_GOLD)
+            screen.blit(title_text, (SCREEN_WIDTH // 2 - title_text.get_width() // 2, 330))
+            
+            creator_text = header_font.render("创始人: quan", True, WHITE)
+            screen.blit(creator_text, (SCREEN_WIDTH // 2 - creator_text.get_width() // 2, 400))
+            
+            date_text = header_font.render("创作时间: 2025/6/26", True, WHITE)
+            screen.blit(date_text, (SCREEN_WIDTH // 2 - date_text.get_width() // 2, 450))
+            
+            # 关闭按钮
+            close_btn = Button(SCREEN_WIDTH // 2 - 100, 520, 200, 60, "关闭", RED, (220, 100, 100), WHITE)
+            close_btn.check_hover(mouse_pos)
+            close_btn.draw(screen)
+            
+            # 处理关闭按钮点击
+            for event in pygame.event.get():
+                if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                    if close_btn.rect.collidepoint(event.pos):
+                        game_state.developer_mode = False
         
         pygame.display.flip()
         clock.tick(60)
